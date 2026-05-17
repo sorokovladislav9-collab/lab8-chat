@@ -6,8 +6,9 @@
   <link rel="stylesheet" href="/style.css">
   <script src="/socket.io/socket.io.js"></script>
   <style>
-    #game-area { display: none; }
-    .active #game-area { display: block; }
+    #messages {
+      border:1px solid #ccc; height:200px; overflow-y:scroll; margin-top:10px; padding:5px;
+    }
   </style>
 </head>
 <body>
@@ -19,18 +20,17 @@
 
   <div id="game-panel" style="display:none">
     <h2>Чат-викторина</h2>
-    <div id="user-list">Игроки: <span id="users"></span></div>
-    <div id="game-controls">
-      <button onclick="startGame()">Начать игру</button>
-      <button onclick="resetGame()">Сбросить</button>
+    <div>Игроки: <span id="users"></span></div>
+    <button onclick="startGame()">Начать игру</button>
+    <button onclick="resetGame()">Сбросить</button>
+
+    <div style="margin:15px 0;">
+      <div id="question-text" style="font-weight:bold; margin-bottom:5px;"></div>
+      <input type="text" id="answer-input" placeholder="Ваш ответ" disabled>
+      <button id="answer-btn" onclick="sendAnswer()" disabled>Ответить</button>
     </div>
-    <div id="game-area">
-      <div id="question-text"></div>
-      <div id="timer"></div>
-      <input type="text" id="answer-input" placeholder="Ваш ответ">
-      <button onclick="sendAnswer()">Ответить</button>
-    </div>
-    <div id="messages" style="border:1px solid #ccc; height:300px; overflow-y:scroll; margin-top:10px;"></div>
+
+    <div id="messages"></div>
   </div>
 
   <script>
@@ -69,7 +69,23 @@
       }
     }
 
-    // Обработчики событий от сервера
+    // Блокируем/разблокируем поле ввода
+    function setAnswerEnabled(enabled) {
+      const input = document.getElementById('answer-input');
+      const btn = document.getElementById('answer-btn');
+      if (enabled) {
+        input.disabled = false;
+        input.placeholder = 'Ваш ответ';
+        btn.disabled = false;
+        input.focus();
+      } else {
+        input.disabled = true;
+        input.placeholder = 'Ожидайте начала игры...';
+        input.value = '';
+        btn.disabled = true;
+      }
+    }
+
     socket.on('message', (data) => {
       addMessage(data.user, data.text);
     });
@@ -82,26 +98,25 @@
       document.getElementById('question-text').textContent = 
         `Вопрос ${data.index}/${data.total}: ${data.question}`;
       addMessage('Сервер', `Вопрос: ${data.question}`);
-      document.getElementById('answer-input').focus();
+      setAnswerEnabled(true);  // Включаем поле
     });
 
     socket.on('gameState', (state) => {
       if (!state.active) {
-        document.getElementById('game-area').style.display = 'none';
-        addMessage('Сервер', state.message);
-      } else {
-        document.getElementById('game-area').style.display = 'block';
+        setAnswerEnabled(false);  // Выключаем поле
+        addMessage('Сервер', state.message || 'Игра не активна');
       }
     });
 
     socket.on('gameOver', (data) => {
+      setAnswerEnabled(false);
       addMessage('Сервер', 'Игра окончена! Результаты:');
       data.scores.forEach((player, index) => {
         addMessage('Сервер', `${index+1}. ${player.name}: ${player.score} очков`);
       });
     });
 
-    // Отправка сообщений по Enter в поле ответа
+    // Enter в поле ответа
     document.getElementById('answer-input').addEventListener('keypress', (e) => {
       if (e.key === 'Enter') sendAnswer();
     });
