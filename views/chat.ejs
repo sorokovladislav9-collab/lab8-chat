@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Чат-викторина</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    #game-area { display: none; }
+    .active #game-area { display: block; }
+  </style>
+</head>
+<body>
+  <div id="login-panel">
+    <h2>Введите имя</h2>
+    <input type="text" id="username-input" placeholder="Ваше имя">
+    <button onclick="setUsername()">Войти</button>
+  </div>
+
+  <div id="game-panel" style="display:none">
+    <h2>Чат-викторина</h2>
+    <div id="user-list">Игроки: <span id="users"></span></div>
+    <div id="game-controls">
+      <button onclick="startGame()">Начать игру</button>
+      <button onclick="resetGame()">Сбросить</button>
+    </div>
+    <div id="game-area">
+      <div id="question-text"></div>
+      <div id="timer"></div>
+      <input type="text" id="answer-input" placeholder="Ваш ответ">
+      <button onclick="sendAnswer()">Ответить</button>
+    </div>
+    <div id="messages" style="border:1px solid #ccc; height:300px; overflow-y:scroll; margin-top:10px;"></div>
+  </div>
+
+  <script>
+    const socket = io();
+    let username = '';
+
+    function addMessage(user, text) {
+      const div = document.getElementById('messages');
+      div.innerHTML += `<p><strong>${user}:</strong> ${text}</p>`;
+      div.scrollTop = div.scrollHeight;
+    }
+
+    function setUsername() {
+      const input = document.getElementById('username-input');
+      username = input.value.trim();
+      if (username) {
+        socket.emit('setUsername', username);
+        document.getElementById('login-panel').style.display = 'none';
+        document.getElementById('game-panel').style.display = 'block';
+      }
+    }
+
+    function startGame() {
+      socket.emit('startGame');
+    }
+
+    function resetGame() {
+      socket.emit('resetGame');
+    }
+
+    function sendAnswer() {
+      const answer = document.getElementById('answer-input').value.trim();
+      if (answer) {
+        socket.emit('answer', answer);
+        document.getElementById('answer-input').value = '';
+      }
+    }
+
+    // Обработчики событий от сервера
+    socket.on('message', (data) => {
+      addMessage(data.user, data.text);
+    });
+
+    socket.on('userList', (users) => {
+      document.getElementById('users').textContent = users.join(', ');
+    });
+
+    socket.on('question', (data) => {
+      document.getElementById('question-text').textContent = 
+        `Вопрос ${data.index}/${data.total}: ${data.question}`;
+      addMessage('Сервер', `Вопрос: ${data.question}`);
+      document.getElementById('answer-input').focus();
+    });
+
+    socket.on('gameState', (state) => {
+      if (!state.active) {
+        document.getElementById('game-area').style.display = 'none';
+        addMessage('Сервер', state.message);
+      } else {
+        document.getElementById('game-area').style.display = 'block';
+      }
+    });
+
+    socket.on('gameOver', (data) => {
+      addMessage('Сервер', 'Игра окончена! Результаты:');
+      data.scores.forEach((player, index) => {
+        addMessage('Сервер', `${index+1}. ${player.name}: ${player.score} очков`);
+      });
+    });
+
+    // Отправка сообщений по Enter в поле ответа
+    document.getElementById('answer-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') sendAnswer();
+    });
+  </script>
+</body>
+</html>
